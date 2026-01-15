@@ -1,0 +1,184 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ALL_SKILLS, type Level } from "@/lib/data";
+
+type Position = {
+  id: string;
+  title: string;
+  requiredSkills: Record<string, Level>;
+  workType?: "全职" | "兼职";
+  mode?: "现场" | "Remote";
+  city?: string;
+  salaryMinK?: number;
+  salaryMaxK?: number;
+  negotiable?: boolean;
+  company?: string;
+};
+
+// 简单的匹配算法：计算已选技能与岗位要求技能的重合度
+function calculateMatchScore(
+  mySkills: Record<string, Level>,
+  jobSkills: Record<string, Level>,
+): number {
+  const jobSkillIds = Object.keys(jobSkills);
+  if (jobSkillIds.length === 0) return 0;
+
+  let matchCount = 0;
+  jobSkillIds.forEach((id) => {
+    if (mySkills[id]) {
+      // 这里可以加更复杂的逻辑，比如等级匹配权重
+      // 简单版：只要有这个技能就算匹配
+      matchCount++;
+    }
+  });
+
+  return Math.round((matchCount / jobSkillIds.length) * 100);
+}
+
+export default function JobMarket() {
+  const [mySkills, setMySkills] = useState<Record<string, Level>>({});
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [positions, setPositions] = useState<Position[]>([]);
+
+  useEffect(() => {
+    const storedSkills = localStorage.getItem("my_skills");
+    let parsedSkills: Record<string, Level> = {};
+    if (storedSkills) {
+      try {
+        parsedSkills = JSON.parse(storedSkills);
+      } catch {
+        parsedSkills = {};
+      }
+    }
+    const storedPositions = localStorage.getItem("my_positions");
+    let parsedPositions: Position[] = [];
+    if (storedPositions) {
+      try {
+        parsedPositions = JSON.parse(storedPositions);
+      } catch {
+        parsedPositions = [];
+      }
+    }
+    setTimeout(() => {
+      setMySkills(parsedSkills);
+      setPositions(parsedPositions);
+      setIsLoaded(true);
+    }, 0);
+  }, []);
+
+  if (!isLoaded) {
+    return <div className="p-8 text-center text-slate-400">Loading...</div>;
+  }
+
+  const jobsWithScore = positions
+    .map((job) => ({
+      ...job,
+      score: calculateMatchScore(mySkills, job.requiredSkills),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  return (
+    <div className="mx-auto max-w-4xl text-white">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-indigo-400">Job Market</h1>
+        <p className="mt-2 text-slate-400">
+          Based on your {Object.keys(mySkills).length} skills and{" "}
+          {positions.length} open positions.
+        </p>
+      </header>
+
+      {jobsWithScore.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">
+          暂时还没有招聘者发布岗位，稍后再来看。
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {jobsWithScore.map((job) => (
+            <div
+              key={job.id}
+              className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-6 transition hover:border-indigo-500/50"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100">
+                    {job.title}
+                  </h2>
+                  <div className="mt-1 text-sm text-slate-400">
+                    {(job.company || "").trim() || "未填写公司名称"}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {(job.workType || "未指定") +
+                      " · " +
+                      (job.mode === "现场"
+                        ? `现场${job.city ? ` · ${job.city}` : ""}`
+                        : job.mode === "Remote"
+                          ? "Remote"
+                          : "未指定地点")}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {job.negotiable
+                      ? "薪资面议"
+                      : job.salaryMinK && job.salaryMaxK
+                        ? `${job.salaryMinK}-${job.salaryMaxK}K`
+                        : "薪资未填写"}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div
+                    className={`text-2xl font-black ${
+                      job.score >= 80
+                        ? "text-emerald-400"
+                        : job.score >= 50
+                          ? "text-yellow-400"
+                          : "text-slate-600"
+                    }`}
+                  >
+                    {job.score}%
+                  </div>
+                  <div className="text-xs text-slate-500">Match Score</div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Tech Stack Requirements
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {Object.entries(job.requiredSkills).map(([skillId, level]) => {
+                    const skillName =
+                      ALL_SKILLS.find((s) => s.id === skillId)?.name || skillId;
+                    const haveIt = Boolean(mySkills[skillId]);
+
+                    return (
+                      <div
+                        key={skillId}
+                        className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
+                          haveIt
+                            ? "border-indigo-500/50 bg-indigo-500/10 text-indigo-200"
+                            : "border-slate-700 bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        <span>{skillName}</span>
+                        <span className="opacity-50">({level})</span>
+                        {haveIt && (
+                          <span className="ml-1 text-emerald-400">✓</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button className="rounded-full bg-slate-100 px-6 py-2 text-sm font-bold text-slate-900 transition hover:bg-white">
+                  Apply Now
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

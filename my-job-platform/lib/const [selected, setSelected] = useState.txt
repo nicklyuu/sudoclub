@@ -1,0 +1,5 @@
+const [selected, setSelected] = useState<Record<string, Level>>({});
+// 点击技能进行选择/取消
+const toggleSkill = (skillId: string) => { ... }
+// 为每项技能设置等级
+const setLevel = (skillId: string, level: Level) => { ... }
