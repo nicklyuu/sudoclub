@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthNav } from "@/app/components/auth-nav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,9 +50,7 @@ export default function RootLayout({
               >
                 发布职位
               </Link>
-              <button className="rounded-full border border-indigo-500 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-300 transition hover:bg-indigo-500/20">
-                登录
-              </button>
+              <AuthNav />
             </nav>
           </header>
           <main className="mt-12 flex-1">{children}</main>

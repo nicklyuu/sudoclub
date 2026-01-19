@@ -1,0 +1,64 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/app/utils/supabase/client";
+
+type User = {
+  email?: string | null;
+};
+
+export function AuthNav() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
+  if (loading) {
+    return (
+      <div className="h-8 w-20 rounded-full bg-slate-800/70" />
+    );
+  }
+
+  if (!user) {
+    return (
+      <Link
+        href="/auth/login"
+        className="rounded-full border border-indigo-500 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-300 transition hover:bg-indigo-500/20"
+      >
+        登录
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="max-w-[140px] truncate text-xs text-slate-300">
+        {user.email}
+      </span>
+      <button
+        type="button"
+        onClick={handleSignOut}
+        className="rounded-full border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
+      >
+        退出登录
+      </button>
+    </div>
+  );
+}
+

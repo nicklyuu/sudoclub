@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ALL_SKILLS, type Level, type Skill } from "@/lib/data";
+import { createClient } from "@/app/utils/supabase/client";
 
 export default function CandidateOnboarding() {
   const router = useRouter();
   const skills: Skill[] = useMemo(() => ALL_SKILLS, []);
   const [showModal, setShowModal] = useState(false);
   const [showFirstModal, setShowFirstModal] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const categories = useMemo(
     () => Array.from(new Set(skills.map((s) => s.category))),
@@ -16,25 +19,42 @@ export default function CandidateOnboarding() {
   );
 
   const [selected, setSelected] = useState<Record<string, Level>>({});
+  const [contact, setContact] = useState("");
 
   useEffect(() => {
-    const stored = localStorage.getItem("my_skills");
-    let parsed: Record<string, Level> = {};
-    if (stored) {
-      try {
-        parsed = JSON.parse(stored);
-      } catch {
-        parsed = {};
-      }
-    }
-    const hasSkills = Object.keys(parsed).length > 0;
-    setTimeout(() => {
-      if (hasSkills) {
-        setSelected(parsed);
+    const supabase = createClient();
+
+    async function loadData() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+
+      if (user) {
+        // Fetch existing resume from Supabase
+        const { data: resume, error } = await supabase
+          .from("resumes")
+          .select("skills, contact")
+          .eq("user_id", user.id)
+          .single();
+
+        if (resume && !error) {
+          // Cast the JSONB back to Record<string, Level>
+          setSelected((resume.skills as unknown as Record<string, Level>) || {});
+          setContact(resume.contact || "");
+        } else {
+            // If no resume found in Supabase, try localStorage for migration (optional, but good UX)
+            // Or just show first modal
+            setShowFirstModal(true);
+        }
       } else {
-        setShowFirstModal(true);
+        // Not logged in
+         setShowFirstModal(true);
       }
-    }, 0);
+      setLoading(false);
+    }
+
+    loadData();
   }, []);
 
   const toggleSkill = (skillId: string) => {
@@ -53,26 +73,37 @@ export default function CandidateOnboarding() {
     setSelected((prev) => ({ ...prev, [skillId]: level }));
   };
 
-  const handleSave = () => {
-    localStorage.setItem("my_skills", JSON.stringify(selected));
-    const resumesRaw = localStorage.getItem("resume_market");
-    let resumes: { id: string; name: string; skills: Record<string, Level> }[] =
-      [];
-    if (resumesRaw) {
-      try {
-        resumes = JSON.parse(resumesRaw);
-      } catch {
-        resumes = [];
-      }
+  const handleSave = async () => {
+    if (!contact.trim()) {
+      alert("请输入联系方式");
+      return;
     }
-    const me = {
-      id: "me",
-      name: "我的简历",
+
+    if (!user) {
+      alert("请先登录");
+      router.push("/auth/login");
+      return;
+    }
+
+    const supabase = createClient();
+    const resumeData = {
+      user_id: user.id,
+      name: user.email ? `${user.email.split("@")[0]}的简历` : "我的简历",
       skills: selected,
+      contact: contact.trim(),
     };
-    const filtered = resumes.filter((r) => r.id !== "me");
-    filtered.push(me);
-    localStorage.setItem("resume_market", JSON.stringify(filtered));
+
+    // Upsert logic: try to insert, on conflict update
+    const { error } = await supabase
+      .from("resumes")
+      .upsert(resumeData, { onConflict: "user_id" });
+
+    if (error) {
+      console.error("Error saving resume:", error);
+      alert("保存失败，请重试");
+      return;
+    }
+
     setShowModal(true);
   };
 
@@ -94,6 +125,20 @@ export default function CandidateOnboarding() {
       <p className="mt-2 text-slate-300">
         Select your skills and set proficiency levels.
       </p>
+
+      <div className="mt-6">
+        <label className="block text-sm font-semibold text-slate-200">
+          联系方式
+        </label>
+        <input
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+          placeholder="请输入邮箱 / 手机 / 微信号，方便招聘者联系"
+          className="mt-2 w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-100 outline-none focus:border-indigo-500"
+        />
+      </div>
+
+
 
       <div className="mt-8 space-y-8">
         {categories.map((cat) => {
