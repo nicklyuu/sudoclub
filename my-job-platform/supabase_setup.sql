@@ -65,3 +65,6 @@ WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own resume" 
 ON resumes FOR UPDATE 
 USING (auth.uid() = user_id);
+
+-- Add nickname column to resumes table
+ALTER TABLE resumes ADD COLUMN IF NOT EXISTS nickname TEXT;

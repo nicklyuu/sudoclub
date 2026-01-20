@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ALL_SKILLS, type Level, type Skill } from "@/lib/data";
 import { createClient } from "@/app/utils/supabase/client";
+import { LoginModal } from "@/app/components/login-modal";
 
 export default function CandidateOnboarding() {
   const router = useRouter();
   const skills: Skill[] = useMemo(() => ALL_SKILLS, []);
   const [showModal, setShowModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showFirstModal, setShowFirstModal] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,7 @@ export default function CandidateOnboarding() {
 
   const [selected, setSelected] = useState<Record<string, Level>>({});
   const [contact, setContact] = useState("");
+  const [nickname, setNickname] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
@@ -34,7 +37,7 @@ export default function CandidateOnboarding() {
         // Fetch existing resume from Supabase
         const { data: resume, error } = await supabase
           .from("resumes")
-          .select("skills, contact")
+          .select("skills, contact, nickname")
           .eq("user_id", user.id)
           .single();
 
@@ -42,6 +45,7 @@ export default function CandidateOnboarding() {
           // Cast the JSONB back to Record<string, Level>
           setSelected((resume.skills as unknown as Record<string, Level>) || {});
           setContact(resume.contact || "");
+          setNickname(resume.nickname || "");
         } else {
             // If no resume found in Supabase, try localStorage for migration (optional, but good UX)
             // Or just show first modal
@@ -49,7 +53,7 @@ export default function CandidateOnboarding() {
         }
       } else {
         // Not logged in
-         setShowFirstModal(true);
+         setShowLoginModal(true);
       }
       setLoading(false);
     }
@@ -88,9 +92,10 @@ export default function CandidateOnboarding() {
     const supabase = createClient();
     const resumeData = {
       user_id: user.id,
-      name: user.email ? `${user.email.split("@")[0]}的简历` : "我的简历",
+      name: nickname.trim() ? `${nickname.trim()}的简历` : (user.email ? `${user.email.split("@")[0]}的简历` : "我的简历"),
       skills: selected,
       contact: contact.trim(),
+      nickname: nickname.trim(),
     };
 
     // Upsert logic: try to insert, on conflict update
@@ -125,6 +130,18 @@ export default function CandidateOnboarding() {
       <p className="mt-2 text-slate-300">
         Select your skills and set proficiency levels.
       </p>
+
+      <div className="mt-6">
+        <label className="block text-sm font-semibold text-slate-200">
+          如何称呼你
+        </label>
+        <input
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
+          placeholder="请输入您的名字或昵称（如：Alex）"
+          className="mt-2 w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-100 outline-none focus:border-indigo-500"
+        />
+      </div>
 
       <div className="mt-6">
         <label className="block text-sm font-semibold text-slate-200">
@@ -216,6 +233,13 @@ export default function CandidateOnboarding() {
           Save & Find Jobs
         </button>
       </div>
+
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
 
       {showFirstModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">

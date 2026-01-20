@@ -33,7 +33,7 @@ export default function RootLayout({
           <header className="flex items-center justify-between">
             <Link
               href="/"
-              className="text-lg font-bold tracking-tight text-indigo-400 md:text-xl"
+              className="text-lg font-bold tracking-tight text-white md:text-xl"
             >
               Sudo Club
             </Link>

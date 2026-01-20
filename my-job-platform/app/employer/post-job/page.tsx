@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ALL_SKILLS, type Level, type Skill } from "@/lib/data";
 import { createClient } from "@/app/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { LoginModal } from "@/app/components/login-modal";
 
 type Position = {
   id: string;
@@ -68,6 +69,7 @@ export default function PostJob() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -103,6 +105,8 @@ export default function PostJob() {
           }));
           setPositions(mappedPositions);
         }
+      } else {
+        setShowLoginModal(true);
       }
 
       // Fetch all resumes (Resume Market)
@@ -347,7 +351,7 @@ export default function PostJob() {
       </header>
 
       {editingIndex !== null && (
-        <section className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <section id="edit-section" className="mb-10 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex-1 space-y-3">
               <div>
@@ -683,6 +687,13 @@ export default function PostJob() {
           </div>
         )}
       </section>
+
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </div>
   );
 }
