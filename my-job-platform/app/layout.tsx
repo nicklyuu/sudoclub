@@ -29,24 +29,24 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 text-white`}
       >
-        <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-6">
+        <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 md:px-6 md:py-6">
           <header className="flex items-center justify-between">
             <Link
               href="/"
-              className="text-xl font-bold tracking-tight text-indigo-400"
+              className="text-lg font-bold tracking-tight text-indigo-400 md:text-xl"
             >
               Sudo Club
             </Link>
-            <nav className="flex items-center gap-4 text-sm">
+            <nav className="flex items-center gap-2 text-xs md:gap-4 md:text-sm">
               <Link
                 href="/candidate/onboarding"
-                className="rounded-full px-4 py-2 font-medium text-slate-200 transition hover:bg-slate-800"
+                className="rounded-full px-3 py-1.5 font-medium text-slate-200 transition hover:bg-slate-800 md:px-4 md:py-2"
               >
                 找工作
               </Link>
               <Link
                 href="/employer/post-job"
-                className="rounded-full px-4 py-2 font-medium text-slate-200 transition hover:bg-slate-800"
+                className="rounded-full px-3 py-1.5 font-medium text-slate-200 transition hover:bg-slate-800 md:px-4 md:py-2"
               >
                 发布职位
               </Link>

@@ -16,17 +16,38 @@ export function AuthNav() {
 
   useEffect(() => {
     const supabase = createClient();
+    
+    // Initial fetch
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
       setLoading(false);
     });
-  }, []);
+
+    // Listen for changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+      if (_event === 'SIGNED_OUT') {
+        setUser(null);
+        router.push("/");
+        router.refresh();
+      } else if (_event === 'SIGNED_IN') {
+        router.refresh();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleSignOut = async () => {
     const supabase = createClient();
+    // Optimistic UI update
+    setUser(null);
     await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
   };
 
   if (loading) {
@@ -39,7 +60,7 @@ export function AuthNav() {
     return (
       <Link
         href="/auth/login"
-        className="rounded-full border border-indigo-500 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-300 transition hover:bg-indigo-500/20"
+        className="rounded-full border border-indigo-500 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/20 md:px-4 md:py-2 md:text-sm"
       >
         登录
       </Link>
@@ -47,14 +68,14 @@ export function AuthNav() {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="max-w-[140px] truncate text-xs text-slate-300">
+    <div className="flex items-center gap-2 md:gap-3">
+      <span className="hidden max-w-[140px] truncate text-xs text-slate-300 md:block">
         {user.email}
       </span>
       <button
         type="button"
         onClick={handleSignOut}
-        className="rounded-full border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
+        className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-700 md:px-4 md:py-2"
       >
         退出登录
       </button>
