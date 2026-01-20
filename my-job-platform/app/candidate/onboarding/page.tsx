@@ -14,6 +14,8 @@ export default function CandidateOnboarding() {
   const [showFirstModal, setShowFirstModal] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [hasResume, setHasResume] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const categories = useMemo(
     () => Array.from(new Set(skills.map((s) => s.category))),
@@ -46,10 +48,14 @@ export default function CandidateOnboarding() {
           setSelected((resume.skills as unknown as Record<string, Level>) || {});
           setContact(resume.contact || "");
           setNickname(resume.nickname || "");
+          setHasResume(true);
+          setIsEditing(false);
         } else {
-            // If no resume found in Supabase, try localStorage for migration (optional, but good UX)
-            // Or just show first modal
-            setShowFirstModal(true);
+          // If no resume found in Supabase, try localStorage for migration (optional, but good UX)
+          // Or just show first modal
+          setHasResume(false);
+          setIsEditing(true);
+          setShowFirstModal(true);
         }
       } else {
         // Not logged in
@@ -109,7 +115,35 @@ export default function CandidateOnboarding() {
       return;
     }
 
+    setHasResume(true);
+    // Optional: exit edit mode after save
+    // setIsEditing(false);
     setShowModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("确定要删除您的简历吗？删除后不可恢复。")) {
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("resumes")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error deleting resume:", error);
+      alert("删除失败，请重试");
+      return;
+    }
+
+    setHasResume(false);
+    setIsEditing(true);
+    setSelected({});
+    setContact("");
+    setNickname("");
+    setShowFirstModal(true);
   };
 
   const selectedList = useMemo(
@@ -122,11 +156,85 @@ export default function CandidateOnboarding() {
     [selected, skills],
   );
 
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Loading...</div>;
+  }
+
+  if (hasResume && !isEditing) {
+    return (
+      <div className="mx-auto max-w-4xl text-white">
+        <h1 className="text-3xl font-bold tracking-tight text-indigo-400">
+          简历管理
+        </h1>
+        <p className="mt-2 text-slate-300">
+          查看和管理您的个人简历信息。
+        </p>
+
+        <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 md:p-8">
+          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {nickname || "未设置昵称"}
+              </h2>
+              <div className="mt-2 text-slate-400">
+                {contact || "未设置联系方式"}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <div className="rounded-full bg-slate-800 px-3 py-1 text-sm text-slate-300">
+                  已选技能: {selectedList.length} 个
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="rounded-full border border-indigo-500 bg-indigo-500/20 px-6 py-2 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/30"
+              >
+                修改简历
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded-full border border-red-500/30 bg-red-500/10 px-6 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+              >
+                删除简历
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-800 pt-8">
+            <h3 className="text-lg font-semibold text-slate-200">技能概览</h3>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedList.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300"
+                >
+                  <span>{item.name}</span>
+                  <span className="opacity-50">({item.level})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl text-white">
-      <h1 className="text-3xl font-bold tracking-tight text-indigo-400">
-        Build Your Skill Profile
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight text-indigo-400">
+          {hasResume ? "Modify Your Resume" : "Build Your Skill Profile"}
+        </h1>
+        {hasResume && (
+          <button
+            onClick={() => setIsEditing(false)}
+            className="text-sm text-slate-400 hover:text-white"
+          >
+            取消修改
+          </button>
+        )}
+      </div>
       <p className="mt-2 text-slate-300">
         Select your skills and set proficiency levels.
       </p>

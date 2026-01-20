@@ -70,6 +70,7 @@ export default function PostJob() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [selectedResume, setSelectedResume] = useState<Resume | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -578,6 +579,29 @@ export default function PostJob() {
               </div>
             )}
           </div>
+
+          <div className="mt-8 flex justify-end border-t border-slate-800 pt-6">
+            <button
+              onClick={saveDraft}
+              disabled={
+                !draftTitle.trim() ||
+                !draftCompany.trim() ||
+                !draftContact.trim() ||
+                !draftWorkType ||
+                !draftWorkType ||
+                !draftMode ||
+                (!draftNegotiable &&
+                  (draftSalaryMinK === "" ||
+                    draftSalaryMaxK === "" ||
+                    Number(draftSalaryMinK) <= 0 ||
+                    Number(draftSalaryMaxK) < Number(draftSalaryMinK) ||
+                    (draftMode === "现场" && !draftCity.trim())))
+              }
+              className="w-full rounded-full border border-indigo-500 bg-indigo-500/20 px-6 py-2.5 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/30 disabled:opacity-50 md:w-auto"
+            >
+              保存岗位
+            </button>
+          </div>
         </section>
       )}
 
@@ -663,21 +687,29 @@ export default function PostJob() {
                       </div>
                     </div>
                     {best && (
-                      <div className="text-right">
-                        <div
-                          className={`text-xl font-black ${
-                            best.score >= 80
-                              ? "text-emerald-400"
-                              : best.score >= 50
-                                ? "text-yellow-400"
-                                : "text-slate-600"
-                          }`}
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <div
+                            className={`text-xl font-black ${
+                              best.score >= 80
+                                ? "text-emerald-400"
+                                : best.score >= 50
+                                  ? "text-yellow-400"
+                                  : "text-slate-600"
+                            }`}
+                          >
+                            {best.score}%
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            与「{best.title}」的匹配度
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedResume(r)}
+                          className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-white"
                         >
-                          {best.score}%
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          与「{best.title}」的匹配度
-                        </div>
+                          显示详情
+                        </button>
                       </div>
                     )}
                   </div>
@@ -687,6 +719,65 @@ export default function PostJob() {
           </div>
         )}
       </section>
+
+      {selectedResume && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-8 shadow-2xl">
+            <button
+              onClick={() => setSelectedResume(null)}
+              className="absolute right-4 top-4 rounded-full bg-slate-800 p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {selectedResume.name}
+              </h2>
+              <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div className="text-sm text-emerald-200/70">联系方式</div>
+                <div className="mt-1 text-xl font-bold text-emerald-400">
+                  {selectedResume.contact || "未提供联系方式"}
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <div className="text-sm text-slate-500">技能画像</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {Object.entries(selectedResume.skills).map(
+                    ([skillId, level]) => {
+                      const skillName =
+                        ALL_SKILLS.find((s) => s.id === skillId)?.name ||
+                        skillId;
+                      return (
+                        <div
+                          key={skillId}
+                          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-300"
+                        >
+                          <span>{skillName}</span>
+                          <span className="opacity-50">({level})</span>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLoginModal && (
         <LoginModal
