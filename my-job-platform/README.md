@@ -1,3 +1,17 @@
+1.0.0 上线
+目前已经实现前端页面搭建，后端接口搭建，数据库搭建，用户登录注册功能。
+后端数据库和用户登录注册使用的是Supabase，数据库使用的是PostgreSQL。
+网站上线使用的是Vercel。
+
+网址：https://sudoclub-seven.vercel.app/
+
+欢迎体验！需要注册账号密码使用。
+
+
+
+
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
