@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/app/utils/supabase/client";
+import { TermsModal } from "@/app/components/terms-modal";
 
 type Mode = "signin" | "signup";
 
@@ -10,6 +11,8 @@ export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -32,6 +35,12 @@ export default function AuthPage() {
           return;
         }
       } else {
+        if (!agreedToTerms) {
+          setError("请先阅读并同意使用条款");
+          setLoading(false);
+          return;
+        }
+
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -122,6 +131,28 @@ export default function AuthPage() {
           </div>
         )}
 
+        {mode === "signup" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="terms"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/40"
+            />
+            <label htmlFor="terms" className="text-sm text-slate-300">
+              我已阅读并同意{" "}
+              <button
+                type="button"
+                onClick={() => setShowTerms(true)}
+                className="text-indigo-400 hover:text-indigo-300 hover:underline"
+              >
+                使用条款
+              </button>
+            </label>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}
@@ -140,6 +171,8 @@ export default function AuthPage() {
       <p className="text-xs leading-relaxed text-slate-400">
         登录即表示你同意平台使用 Supabase 存储你的账号信息。后续可以在导航栏右上角随时退出登录。
       </p>
+
+      <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
   );
 }
