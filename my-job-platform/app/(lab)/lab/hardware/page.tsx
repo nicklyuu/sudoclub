@@ -250,12 +250,6 @@ export default function HardwarePage() {
                     alt="Strafing Demo"
                     className="w-full h-full object-cover"
                  />
-                 {/* Play Button Overlay (Visual only) */}
-                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/20">
-                       <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-white border-b-[10px] border-b-transparent ml-1" />
-                    </div>
-                 </div>
               </div>
             </div>
           </motion.div>
