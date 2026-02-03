@@ -10,6 +10,22 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --animate-beam-move: beam-move var(--duration) infinite linear var(--delay);
+  
+  @keyframes beam-move {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(45deg) translateX(-200px);
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(45deg) translateX(200px);
+    }
+  }
 }
 
 /* Remove global body overrides; rely on Tailwind classes from layout */
