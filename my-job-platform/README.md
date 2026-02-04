@@ -15,6 +15,12 @@ Sudo Club 是一个连接具身智能（Embodied AI）与机器人领域顶尖�
 - **简历市场**：浏览候选人列表，直观查看技能匹配情况。
 - **人才详情**：查看候选人详细技能画像及联系方式。
 
+### 🤖 向量实验室 (Vector Lab)
+- **Mini Inspector**：新一代桌面级具身智能教具的沉浸式展示页。
+- **视觉体验**：采用 "流光溢彩" 暗黑科技风设计，集成 Background Beams 与 Mouse Spotlight 特效。
+- **交互动画**：基于 Framer Motion 实现的平滑入场、呼吸光晕与悬浮效果。
+- **全栈架构展示**：直观呈现从硬件算力（Orange Pi 5/RK3588）到软件算法（Vector Visualizer）的技术闭环。
+
 ### 核心特性
 - **精准匹配算法**：基于技能树的自动匹配评分系统。
 - **多样化连接**：覆盖求职、科研（CVPR/ICRA等）、创业、竞赛（Kaggle等）多种场景。
@@ -22,9 +28,11 @@ Sudo Club 是一个连接具身智能（Embodied AI）与机器人领域顶尖�
 ## 🛠️ 技术栈
 
 - **Frontend**: [Next.js 15](https://nextjs.org/) (App Router), React
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/), [Aceternity UI](https://ui.aceternity.com/) (Visual Effects)
+- **Animation**: [Framer Motion](https://www.framer.com/motion/)
 - **Backend / Database**: [Supabase](https://supabase.com/) (PostgreSQL, Auth, RLS)
 - **Language**: TypeScript
+- **Icons**: [Lucide React](https://lucide.dev/)
 
 ## 🚀 快速开始
 
@@ -71,9 +79,9 @@ npm run dev
 ```
 my-job-platform/
 ├── app/
-│   ├── candidate/       # 求职者/人才相关页面 (Onboarding, Jobs)
-│   ├── employer/        # 招聘者相关页面 (Post Job)
-│   ├── components/      # 公共组件 (LoginModal, AuthNav)
+│   ├── (lab)/           # 向量实验室相关页面 (Mini Inspector, Hardware, Software)
+│   ├── (main)/          # 主应用页面 (Auth, Candidate, Employer)
+│   ├── components/      # 公共组件 (UI, BentoGrid, VectorLabCard)
 │   ├── utils/supabase/  # Supabase 客户端与服务端配置
 │   └── ...
 ├── lib/                 # 公共数据 (Skills 定义) 与工具函数
