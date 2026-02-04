@@ -95,12 +95,12 @@ export default function MiniInspectorPage() {
         </header>
 
         {/* Hero Section with Mouse Spotlight */}
-        <MouseSpotlight className="relative flex flex-1 items-center justify-center min-h-[80vh] rounded-3xl">
-          <div className="grid w-full max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-2 px-4 md:px-8 relative z-10 py-12 pb-48">
+        <MouseSpotlight className="relative flex flex-col flex-1 items-center justify-center min-h-[80vh] rounded-3xl">
+          <div className="grid w-full max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-2 px-4 md:px-8 relative z-10 py-12 pb-12 md:pb-48">
             
             {/* Left: Hero Image (Levitating Robot) */}
             <div className="relative mx-auto w-full max-w-lg lg:max-w-full order-2 lg:order-1 flex justify-center">
-              <div className="relative w-full aspect-square max-w-[500px] scale-125 translate-y-24">
+              <div className="relative w-full aspect-square max-w-[500px] scale-150 translate-y-32">
                 
                 {/* Breathing Glow Behind */}
                 <motion.div 
@@ -139,12 +139,12 @@ export default function MiniInspectorPage() {
                 </div>
 
                 {/* 2. Product Definition (Super Headline) */}
-                <h2 className="mb-2 text-xl font-semibold tracking-wide text-cyan-400 md:text-2xl">
+                <h2 className="mb-2 text-lg font-semibold tracking-wide text-cyan-400 md:text-2xl">
                   新一代桌面级具身智能教具
                 </h2>
               </motion.div>
 
-              <motion.h1 variants={itemVariants} className="mb-6 font-sans text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-400 sm:text-6xl lg:text-7xl leading-[1.1]">
+              <motion.h1 variants={itemVariants} className="mb-6 font-sans text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-400 sm:text-6xl lg:text-7xl leading-[1.1]">
                 把工业机器人，<br />装进书包。
               </motion.h1>
 
@@ -160,8 +160,8 @@ export default function MiniInspectorPage() {
                 ，我们把真实的自动化技术浓缩在桌面。
               </motion.p>
 
-              <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-4">
-                <Link href="#" className="relative inline-flex h-12 overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-50">
+              <motion.div variants={itemVariants} className="flex flex-col w-full sm:w-auto sm:flex-row items-center gap-4">
+                <Link href="#" className="relative inline-flex h-12 w-full sm:w-auto overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-50">
                   <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)]" />
                   <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-6 py-1 text-sm font-medium text-white backdrop-blur-3xl transition hover:bg-slate-900">
                     开启先行者计划_
@@ -174,7 +174,7 @@ export default function MiniInspectorPage() {
                     e.preventDefault();
                     document.getElementById('tech-architecture')?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  className="group flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-slate-300 transition hover:text-white"
+                  className="group flex w-full sm:w-auto justify-center items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-slate-300 transition hover:text-white"
                 >
                   探索技术架构 
                   <span className="transition-transform group-hover:translate-x-1">&gt;</span>
@@ -186,7 +186,7 @@ export default function MiniInspectorPage() {
           </div>
           
           {/* Full-width Value Bar - 4 Columns */}
-          <div className="absolute bottom-0 left-0 right-0 z-30 w-full border-t border-white/10 bg-white/5 py-6 backdrop-blur-sm md:py-8">
+          <div className="relative mt-16 w-full border-t border-white/10 bg-slate-950 py-8 z-30 md:absolute md:bottom-0 md:mt-0 md:bg-white/5 md:backdrop-blur-sm">
             <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 md:grid-cols-2 lg:grid-cols-4">
               
               {/* 1. 具身智能 (New) */}
