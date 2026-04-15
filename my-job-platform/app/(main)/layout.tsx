@@ -43,6 +43,12 @@ export default function MainLayout({
         </header>
         <main className="mt-12 flex-1">{children}</main>
       </div>
+      <Link
+        href="/survivor/index.html"
+        className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-indigo-300/35 bg-indigo-500/90 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/35 transition hover:bg-indigo-400"
+      >
+        进入生存者小游戏
+      </Link>
     </div>
   );
 }

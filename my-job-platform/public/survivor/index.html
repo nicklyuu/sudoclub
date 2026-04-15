@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas 原型：类吸血鬼幸存者</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #222;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: #222;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 10;
+      }
+
+      .overlay.hidden {
+        display: none;
+      }
+
+      .modal {
+        width: min(920px, calc(100vw - 40px));
+        background: rgba(20, 20, 20, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      }
+
+      .modal-title {
+        color: #fff;
+        font-weight: 700;
+        font-size: 22px;
+        margin-bottom: 14px;
+        text-align: center;
+      }
+
+      .cards {
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+      }
+
+      .card {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #fff;
+        padding: 14px;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.24);
+      }
+
+      .card-title {
+        font-weight: 800;
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+
+      .card-desc {
+        opacity: 0.9;
+        line-height: 1.35;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="levelupOverlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modal-title">升级！选择一项</div>
+        <div id="upgradeCards" class="cards"></div>
+      </div>
+    </div>
+
+    <script>
+      "use strict";
+
+      // ------------------------------
+      // 工具函数：数学与向量
+      // ------------------------------
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const distSq = (ax, ay, bx, by) => {
+        const dx = ax - bx;
+        const dy = ay - by;
+        return dx * dx + dy * dy;
+      };
+
+      const circleRectOverlap = (circleX, circleY, radius, rectCenterX, rectCenterY, rectSize) => {
+        const half = rectSize / 2;
+        const closestX = clamp(circleX, rectCenterX - half, rectCenterX + half);
+        const closestY = clamp(circleY, rectCenterY - half, rectCenterY + half);
+        return distSq(circleX, circleY, closestX, closestY) <= radius * radius;
+      };
+
+      const UPGRADES = [
+        { id: "move_speed", title: "提升移速", desc: "移动速度 +15%" },
+        { id: "fire_rate", title: "提升射速", desc: "射击间隔 -15%" },
+        { id: "bullet_pierce", title: "子弹穿透", desc: "子弹可额外穿透 1 个敌人" },
+      ];
+
+      class Vec2 {
+        constructor(x = 0, y = 0) {
+          this.x = x;
+          this.y = y;
+        }
+
+        copy() {
+          return new Vec2(this.x, this.y);
+        }
+
+        add(v) {
+          this.x += v.x;
+          this.y += v.y;
+          return this;
+        }
+
+        sub(v) {
+          this.x -= v.x;
+          this.y -= v.y;
+          return this;
+        }
+
+        scale(s) {
+          this.x *= s;
+          this.y *= s;
+          return this;
+        }
+
+        length() {
+          return Math.hypot(this.x, this.y);
+        }
+
+        normalize() {
+          const len = this.length();
+          if (len > 0) this.scale(1 / len);
+          return this;
+        }
+      }
+
+      // ------------------------------
+      // 输入管理：WASD 按键状态
+      // ------------------------------
+      class Input {
+        constructor() {
+          this.pressed = new Set();
+          this._bindEvents();
+        }
+
+        _bindEvents() {
+          window.addEventListener("keydown", (e) => {
+            // 防止按下方向键/空格时页面滚动（WASD 通常不会滚动，但做一次兜底）
+            if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+              e.preventDefault();
+            }
+            this.pressed.add(e.code);
+          });
+
+          window.addEventListener("keyup", (e) => {
+            this.pressed.delete(e.code);
+          });
+
+          // 切出页面或失去焦点时，清空按键，避免“卡键”
+          window.addEventListener("blur", () => {
+            this.pressed.clear();
+          });
+        }
+
+        isDown(code) {
+          return this.pressed.has(code);
+        }
+      }
+
+      // ------------------------------
+      // 玩家：蓝色圆形，受 WASD 控制
+      // ------------------------------
+      class Player {
+        constructor(x, y) {
+          this.pos = new Vec2(x, y);
+          this.radius = 15;
+          this.color = "#2d7dff";
+          this.speed = 260; // 单位：像素/秒
+          this.hp = 100;
+          this.level = 1;
+          this.exp = 0;
+          this.expToLevel = 50;
+          this.shootInterval = 0.5;
+          this.bulletPierce = 0;
+        }
+
+        update(dt, input, bounds) {
+          // 1) 读取输入，得到移动方向
+          const dir = new Vec2(0, 0);
+          if (input.isDown("KeyW")) dir.y -= 1;
+          if (input.isDown("KeyS")) dir.y += 1;
+          if (input.isDown("KeyA")) dir.x -= 1;
+          if (input.isDown("KeyD")) dir.x += 1;
+
+          // 2) 归一化：保证斜向移动不会更快
+          if (dir.x !== 0 || dir.y !== 0) dir.normalize();
+
+          // 3) 基于 dt（秒）进行位移：不同帧率也能保持速度一致
+          this.pos.add(dir.scale(this.speed * dt));
+
+          // 4) 边界约束：玩家不能出画布
+          this.pos.x = clamp(this.pos.x, this.radius, bounds.width - this.radius);
+          this.pos.y = clamp(this.pos.y, this.radius, bounds.height - this.radius);
+        }
+
+        draw(ctx) {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        takeDamage(amount) {
+          this.hp = Math.max(0, this.hp - amount);
+        }
+
+        addExp(amount) {
+          this.exp += amount;
+        }
+      }
+
+      // ------------------------------
+      // 敌人：红色方形，持续朝玩家当前位置直线移动
+      // ------------------------------
+      class Enemy {
+        constructor(x, y) {
+          this.pos = new Vec2(x, y);
+          this.size = 20;
+          this.color = "#ff3b30";
+          this.speed = 120; // 单位：像素/秒
+        }
+
+        update(dt, player) {
+          // 以“玩家当前位置”为目标，计算方向向量并移动
+          const dir = player.pos.copy().sub(this.pos);
+          const dist = dir.length();
+          if (dist === 0) return;
+          dir.scale(1 / dist);
+          this.pos.add(dir.scale(this.speed * dt));
+        }
+
+        draw(ctx) {
+          ctx.fillStyle = this.color;
+          ctx.fillRect(this.pos.x - this.size / 2, this.pos.y - this.size / 2, this.size, this.size);
+        }
+      }
+
+      // ------------------------------
+      // 子弹：黄色小圆点，朝目标方向匀速直线飞行
+      // ------------------------------
+      class Bullet {
+        constructor(x, y, dir, pierce = 0) {
+          this.pos = new Vec2(x, y);
+          this.radius = 4;
+          this.color = "#ffd60a";
+          this.speed = 520; // 单位：像素/秒
+          this.vel = dir.copy().normalize().scale(this.speed);
+          this.pierceLeft = pierce;
+        }
+
+        update(dt) {
+          this.pos.add(this.vel.copy().scale(dt));
+        }
+
+        isOutOfBounds(bounds) {
+          // 飞出画布边界一定距离后销毁，避免数组无限增长
+          const margin = 60;
+          return (
+            this.pos.x < -margin ||
+            this.pos.x > bounds.width + margin ||
+            this.pos.y < -margin ||
+            this.pos.y > bounds.height + margin
+          );
+        }
+
+        draw(ctx) {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // ------------------------------
+      // 经验球：绿色菱形，触碰后获得经验
+      // ------------------------------
+      class ExpOrb {
+        constructor(x, y) {
+          this.pos = new Vec2(x, y);
+          this.radius = 6;
+          this.color = "#34c759";
+          this.expValue = 10;
+        }
+
+        draw(ctx) {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.moveTo(this.pos.x, this.pos.y - this.radius);
+          ctx.lineTo(this.pos.x + this.radius, this.pos.y);
+          ctx.lineTo(this.pos.x, this.pos.y + this.radius);
+          ctx.lineTo(this.pos.x - this.radius, this.pos.y);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      // ------------------------------
+      // 游戏：负责画布、生成敌人、主循环
+      // ------------------------------
+      class Game {
+        constructor(canvas) {
+          this.canvas = canvas;
+          this.ctx = canvas.getContext("2d");
+          this.input = new Input();
+
+          this.bounds = { width: 0, height: 0, dpr: 1 };
+          this._resize();
+          window.addEventListener("resize", () => this._resize());
+
+          // 玩家初始位置：画布中心
+          this.player = new Player(this.bounds.width / 2, this.bounds.height / 2);
+
+          // 敌人列表
+          this.enemies = [];
+
+          // 子弹列表
+          this.bullets = [];
+
+          // 经验球列表
+          this.expOrbs = [];
+
+          // 生成敌人的计时器（每 1 秒生成 1 个）
+          this.spawnInterval = 1.0; // 秒
+          this.spawnTimer = 0;
+
+          // 自动射击计时器（每 0.5 秒尝试发射一颗）
+          this.shootTimer = 0;
+
+          // 游戏状态：玩家 HP 为 0 时进入 Game Over
+          this.isGameOver = false;
+
+          // 升级暂停：达到升级条件时暂停并弹出选择
+          this.isLevelUpPaused = false;
+          this.levelupOverlay = document.getElementById("levelupOverlay");
+          this.upgradeCardsEl = document.getElementById("upgradeCards");
+
+          // 主循环相关
+          this._lastTs = 0;
+          this._loop = this._loop.bind(this);
+        }
+
+        _resize() {
+          // 为了兼顾高清屏（Retina），使用 devicePixelRatio 做像素比缩放
+          const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+          const width = window.innerWidth;
+          const height = window.innerHeight;
+
+          this.bounds.width = width;
+          this.bounds.height = height;
+          this.bounds.dpr = dpr;
+
+          this.canvas.width = Math.floor(width * dpr);
+          this.canvas.height = Math.floor(height * dpr);
+
+          // setTransform 让我们用“CSS 像素坐标”来画（逻辑坐标=屏幕像素）
+          this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+          // 如果玩家已创建，确保缩放/改尺寸后仍在边界内
+          if (this.player) {
+            this.player.pos.x = clamp(this.player.pos.x, this.player.radius, width - this.player.radius);
+            this.player.pos.y = clamp(this.player.pos.y, this.player.radius, height - this.player.radius);
+          }
+        }
+
+        _spawnEnemy() {
+          // 敌人在“画布外边缘”随机生成：
+          // - 随机选择一个边（上/下/左/右）
+          // - 在该边上随机一个位置
+          // - 将敌人放到画布外一小段距离，确保从外面出现
+          const margin = 30;
+          const w = this.bounds.width;
+          const h = this.bounds.height;
+
+          const side = Math.floor(Math.random() * 4);
+          let x = 0;
+          let y = 0;
+
+          if (side === 0) {
+            // 上边
+            x = Math.random() * w;
+            y = -margin;
+          } else if (side === 1) {
+            // 下边
+            x = Math.random() * w;
+            y = h + margin;
+          } else if (side === 2) {
+            // 左边
+            x = -margin;
+            y = Math.random() * h;
+          } else {
+            // 右边
+            x = w + margin;
+            y = Math.random() * h;
+          }
+
+          this.enemies.push(new Enemy(x, y));
+        }
+
+        start() {
+          requestAnimationFrame(this._loop);
+        }
+
+        resume() {
+          if (this.isGameOver) return;
+          if (!this.isLevelUpPaused) return;
+          this.isLevelUpPaused = false;
+          this._lastTs = 0;
+          requestAnimationFrame(this._loop);
+        }
+
+        _shuffleCopy(arr) {
+          const copy = arr.slice();
+          for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = copy[i];
+            copy[i] = copy[j];
+            copy[j] = tmp;
+          }
+          return copy;
+        }
+
+        _openLevelUpModal() {
+          const choices = this._shuffleCopy(UPGRADES).slice(0, 3);
+          this.upgradeCardsEl.innerHTML = "";
+
+          for (const upgrade of choices) {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.tabIndex = 0;
+            card.dataset.upgradeId = upgrade.id;
+
+            const title = document.createElement("div");
+            title.className = "card-title";
+            title.textContent = upgrade.title;
+
+            const desc = document.createElement("div");
+            desc.className = "card-desc";
+            desc.textContent = upgrade.desc;
+
+            card.appendChild(title);
+            card.appendChild(desc);
+
+            const onPick = () => {
+              this._applyUpgrade(upgrade.id);
+              this.levelupOverlay.classList.add("hidden");
+              this.resume();
+            };
+
+            card.addEventListener("click", onPick);
+            card.addEventListener("keydown", (e) => {
+              if (e.code === "Enter" || e.code === "Space") {
+                e.preventDefault();
+                onPick();
+              }
+            });
+
+            this.upgradeCardsEl.appendChild(card);
+          }
+
+          this.levelupOverlay.classList.remove("hidden");
+        }
+
+        _applyUpgrade(upgradeId) {
+          if (upgradeId === "move_speed") {
+            this.player.speed *= 1.15;
+            return;
+          }
+          if (upgradeId === "fire_rate") {
+            this.player.shootInterval *= 0.85;
+            this.player.shootInterval = Math.max(0.08, this.player.shootInterval);
+            return;
+          }
+          if (upgradeId === "bullet_pierce") {
+            this.player.bulletPierce += 1;
+          }
+        }
+
+        _tryShoot() {
+          // 屏幕上没有敌人：不发射
+          if (this.enemies.length === 0) return;
+
+          // 遍历敌人，找到距离玩家最近的那个
+          const px = this.player.pos.x;
+          const py = this.player.pos.y;
+          let nearestEnemy = null;
+          let nearestDistSq = Infinity;
+          for (const enemy of this.enemies) {
+            const d2 = distSq(px, py, enemy.pos.x, enemy.pos.y);
+            if (d2 < nearestDistSq) {
+              nearestDistSq = d2;
+              nearestEnemy = enemy;
+            }
+          }
+
+          if (!nearestEnemy) return;
+
+          // 子弹朝向“当前最近敌人”的方向直线飞行
+          const dir = nearestEnemy.pos.copy().sub(this.player.pos);
+          if (dir.length() === 0) return;
+          this.bullets.push(new Bullet(px, py, dir, this.player.bulletPierce));
+        }
+
+        _handleCollisions() {
+          // 1) 敌人碰到玩家：玩家掉血 + 敌人消失
+          for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            const hitPlayer = circleRectOverlap(
+              this.player.pos.x,
+              this.player.pos.y,
+              this.player.radius,
+              enemy.pos.x,
+              enemy.pos.y,
+              enemy.size
+            );
+
+            if (!hitPlayer) continue;
+
+            this.player.takeDamage(10);
+            this.enemies.splice(i, 1);
+
+            if (this.player.hp <= 0) {
+              this.isGameOver = true;
+              return;
+            }
+          }
+
+          // 2) 子弹碰到敌人：子弹与敌人同时消失
+          for (let bi = this.bullets.length - 1; bi >= 0; bi--) {
+            const bullet = this.bullets[bi];
+
+            for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
+              const enemy = this.enemies[ei];
+              const hitEnemy = circleRectOverlap(
+                bullet.pos.x,
+                bullet.pos.y,
+                bullet.radius,
+                enemy.pos.x,
+                enemy.pos.y,
+                enemy.size
+              );
+
+              if (!hitEnemy) continue;
+
+              this.expOrbs.push(new ExpOrb(enemy.pos.x, enemy.pos.y));
+              this.enemies.splice(ei, 1);
+              if (bullet.pierceLeft > 0) {
+                bullet.pierceLeft -= 1;
+              } else {
+                this.bullets.splice(bi, 1);
+              }
+              break;
+            }
+          }
+        }
+
+        _update(dt) {
+          if (this.isGameOver || this.isLevelUpPaused) return;
+
+          this.player.update(dt, this.input, this.bounds);
+
+          // 生成敌人：累积 dt，当超过 1 秒就生成
+          this.spawnTimer += dt;
+          while (this.spawnTimer >= this.spawnInterval) {
+            this.spawnTimer -= this.spawnInterval;
+            this._spawnEnemy();
+          }
+
+          for (const enemy of this.enemies) {
+            enemy.update(dt, this.player);
+          }
+
+          // 自动射击：每 0.5 秒尝试发射一颗（没有敌人则跳过）
+          this.shootTimer += dt;
+          while (this.shootTimer >= this.player.shootInterval) {
+            this.shootTimer -= this.player.shootInterval;
+            this._tryShoot();
+          }
+
+          // 更新子弹位置，并销毁飞出边界的子弹
+          for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            bullet.update(dt);
+            if (bullet.isOutOfBounds(this.bounds)) this.bullets.splice(i, 1);
+          }
+
+          this._handleCollisions();
+
+          for (let i = this.expOrbs.length - 1; i >= 0; i--) {
+            const orb = this.expOrbs[i];
+            const hit = distSq(this.player.pos.x, this.player.pos.y, orb.pos.x, orb.pos.y) <= (this.player.radius + orb.radius) ** 2;
+            if (!hit) continue;
+            this.player.addExp(orb.expValue);
+            this.expOrbs.splice(i, 1);
+          }
+
+          if (this.player.exp >= this.player.expToLevel) {
+            this.player.exp -= this.player.expToLevel;
+            this.player.level += 1;
+            this.player.expToLevel = Math.ceil(this.player.expToLevel * 1.2);
+            this.isLevelUpPaused = true;
+            this._openLevelUpModal();
+          }
+        }
+
+        _render() {
+          // 背景填充（深灰色 #222）
+          this.ctx.fillStyle = "#222";
+          this.ctx.fillRect(0, 0, this.bounds.width, this.bounds.height);
+
+          // 绘制玩家与敌人
+          this.player.draw(this.ctx);
+          for (const enemy of this.enemies) enemy.draw(this.ctx);
+          for (const bullet of this.bullets) bullet.draw(this.ctx);
+          for (const orb of this.expOrbs) orb.draw(this.ctx);
+
+          // 左上角显示玩家 HP
+          this.ctx.fillStyle = "#fff";
+          this.ctx.font = "18px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+          this.ctx.textAlign = "left";
+          this.ctx.textBaseline = "top";
+          this.ctx.fillText(`HP: ${this.player.hp}`, 12, 10);
+
+          const barX = 12;
+          const barY = 12;
+          const barW = Math.min(520, this.bounds.width - 24);
+          const barH = 12;
+          const ratio = clamp(this.player.exp / this.player.expToLevel, 0, 1);
+
+          this.ctx.fillStyle = "rgba(255,255,255,0.12)";
+          this.ctx.fillRect(barX, 40, barW, barH);
+          this.ctx.fillStyle = "#34c759";
+          this.ctx.fillRect(barX, 40, barW * ratio, barH);
+          this.ctx.strokeStyle = "rgba(255,255,255,0.18)";
+          this.ctx.strokeRect(barX, 40, barW, barH);
+          this.ctx.fillStyle = "#fff";
+          this.ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+          this.ctx.fillText(`Lv ${this.player.level}  EXP: ${this.player.exp}/${this.player.expToLevel}`, barX, 56);
+
+          // Game Over 提示
+          if (this.isGameOver) {
+            this.ctx.fillStyle = "#fff";
+            this.ctx.font = "bold 72px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.fillText("Game Over", this.bounds.width / 2, this.bounds.height / 2);
+          }
+        }
+
+        _loop(ts) {
+          // requestAnimationFrame 给的是毫秒时间戳；换算成秒，并做 dt 限制避免切回页面瞬移
+          if (!this._lastTs) this._lastTs = ts;
+          let dt = (ts - this._lastTs) / 1000;
+          this._lastTs = ts;
+          dt = Math.min(dt, 0.05); // 最多按 50ms 计算，避免长时间切后台后 dt 过大
+
+          this._update(dt);
+          this._render();
+
+          if (!this.isGameOver && !this.isLevelUpPaused) requestAnimationFrame(this._loop);
+        }
+      }
+
+      // ------------------------------
+      // 启动游戏
+      // ------------------------------
+      const canvas = document.getElementById("game");
+      const game = new Game(canvas);
+      game.start();
+    </script>
+  </body>
+</html>
