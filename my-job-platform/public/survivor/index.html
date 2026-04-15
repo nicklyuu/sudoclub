@@ -207,11 +207,13 @@
           this.radius = 15;
           this.color = "#2d7dff";
           this.speed = 260; // 单位：像素/秒
+          this.maxHp = 100;
           this.hp = 100;
           this.level = 1;
           this.exp = 0;
           this.expToLevel = 50;
           this.shootInterval = 0.5;
+          this.bulletDamage = 6;
           this.bulletPierce = 0;
         }
 
@@ -245,6 +247,10 @@
           this.hp = Math.max(0, this.hp - amount);
         }
 
+        heal(amount) {
+          this.hp = Math.min(this.maxHp, this.hp + amount);
+        }
+
         addExp(amount) {
           this.exp += amount;
         }
@@ -254,11 +260,16 @@
       // 敌人：红色方形，持续朝玩家当前位置直线移动
       // ------------------------------
       class Enemy {
-        constructor(x, y) {
+        static nextId = 1;
+
+        constructor(x, y, hp = 22) {
+          this.id = Enemy.nextId++;
           this.pos = new Vec2(x, y);
           this.size = 20;
           this.color = "#ff3b30";
           this.speed = 120; // 单位：像素/秒
+          this.maxHp = hp;
+          this.hp = hp;
         }
 
         update(dt, player) {
@@ -280,13 +291,15 @@
       // 子弹：黄色小圆点，朝目标方向匀速直线飞行
       // ------------------------------
       class Bullet {
-        constructor(x, y, dir, pierce = 0) {
+        constructor(x, y, dir, damage = 6, pierce = 0) {
           this.pos = new Vec2(x, y);
           this.radius = 4;
           this.color = "#ffd60a";
           this.speed = 520; // 单位：像素/秒
           this.vel = dir.copy().normalize().scale(this.speed);
+          this.damage = damage;
           this.pierceLeft = pierce;
+          this.hitEnemyIds = new Set();
         }
 
         update(dt) {
@@ -336,6 +349,67 @@
       }
 
       // ------------------------------
+      // 道具掉落：触碰拾取，提供治疗/属性加成
+      // ------------------------------
+      class Pickup {
+        constructor(x, y, type) {
+          this.pos = new Vec2(x, y);
+          this.type = type;
+          this.radius = 9;
+        }
+
+        apply(player) {
+          if (this.type === "heal") {
+            player.heal(25);
+            return;
+          }
+          if (this.type === "move_speed") {
+            player.speed *= 1.08;
+            return;
+          }
+          if (this.type === "fire_rate") {
+            player.shootInterval *= 0.92;
+            player.shootInterval = Math.max(0.08, player.shootInterval);
+            return;
+          }
+          if (this.type === "damage") {
+            player.bulletDamage *= 1.15;
+          }
+        }
+
+        draw(ctx) {
+          if (this.type === "heal") {
+            ctx.fillStyle = "#ff5d8f";
+            ctx.beginPath();
+            ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "rgba(255,255,255,0.9)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x - 4, this.pos.y);
+            ctx.lineTo(this.pos.x + 4, this.pos.y);
+            ctx.moveTo(this.pos.x, this.pos.y - 4);
+            ctx.lineTo(this.pos.x, this.pos.y + 4);
+            ctx.stroke();
+            return;
+          }
+
+          if (this.type === "damage") {
+            ctx.fillStyle = "#ff9f0a";
+          } else if (this.type === "fire_rate") {
+            ctx.fillStyle = "#64d2ff";
+          } else {
+            ctx.fillStyle = "#bf5af2";
+          }
+
+          ctx.beginPath();
+          ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // ------------------------------
       // 游戏：负责画布、生成敌人、主循环
       // ------------------------------
       class Game {
@@ -360,9 +434,15 @@
           // 经验球列表
           this.expOrbs = [];
 
-          // 生成敌人的计时器（每 1 秒生成 1 个）
-          this.spawnInterval = 1.0; // 秒
+          // 道具列表
+          this.pickups = [];
+
+          // 敌人生成：初期更密集，并随时间逐步加快
+          this.spawnIntervalBase = 0.7; // 秒
+          this.spawnIntervalMin = 0.18; // 秒
           this.spawnTimer = 0;
+          this.timeAlive = 0;
+          this.maxEnemies = 140;
 
           // 自动射击计时器（每 0.5 秒尝试发射一颗）
           this.shootTimer = 0;
@@ -434,7 +514,10 @@
             y = Math.random() * h;
           }
 
-          this.enemies.push(new Enemy(x, y));
+          const hp = Math.min(160, 22 + Math.floor(this.timeAlive * 0.7) + Math.floor(this.player.level * 1.5));
+          const enemy = new Enemy(x, y, hp);
+          enemy.speed = 120 + Math.min(90, this.timeAlive * 0.9);
+          this.enemies.push(enemy);
         }
 
         start() {
@@ -538,7 +621,28 @@
           // 子弹朝向“当前最近敌人”的方向直线飞行
           const dir = nearestEnemy.pos.copy().sub(this.player.pos);
           if (dir.length() === 0) return;
-          this.bullets.push(new Bullet(px, py, dir, this.player.bulletPierce));
+          this.bullets.push(new Bullet(px, py, dir, this.player.bulletDamage, this.player.bulletPierce));
+        }
+
+        _dropLoot(enemy) {
+          this.expOrbs.push(new ExpOrb(enemy.pos.x, enemy.pos.y));
+
+          const roll = Math.random();
+          if (roll < 0.1) {
+            this.pickups.push(new Pickup(enemy.pos.x, enemy.pos.y, "heal"));
+            return;
+          }
+          if (roll < 0.16) {
+            this.pickups.push(new Pickup(enemy.pos.x, enemy.pos.y, "damage"));
+            return;
+          }
+          if (roll < 0.22) {
+            this.pickups.push(new Pickup(enemy.pos.x, enemy.pos.y, "fire_rate"));
+            return;
+          }
+          if (roll < 0.28) {
+            this.pickups.push(new Pickup(enemy.pos.x, enemy.pos.y, "move_speed"));
+          }
         }
 
         _handleCollisions() {
@@ -568,9 +672,11 @@
           // 2) 子弹碰到敌人：子弹与敌人同时消失
           for (let bi = this.bullets.length - 1; bi >= 0; bi--) {
             const bullet = this.bullets[bi];
+            let bulletRemoved = false;
 
             for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
               const enemy = this.enemies[ei];
+              if (bullet.hitEnemyIds.has(enemy.id)) continue;
               const hitEnemy = circleRectOverlap(
                 bullet.pos.x,
                 bullet.pos.y,
@@ -582,28 +688,41 @@
 
               if (!hitEnemy) continue;
 
-              this.expOrbs.push(new ExpOrb(enemy.pos.x, enemy.pos.y));
-              this.enemies.splice(ei, 1);
+              bullet.hitEnemyIds.add(enemy.id);
+              enemy.hp -= bullet.damage;
+              if (enemy.hp <= 0) {
+                this.enemies.splice(ei, 1);
+                this._dropLoot(enemy);
+              }
+
               if (bullet.pierceLeft > 0) {
                 bullet.pierceLeft -= 1;
               } else {
                 this.bullets.splice(bi, 1);
+                bulletRemoved = true;
               }
               break;
             }
+
+            if (bulletRemoved) continue;
           }
         }
 
         _update(dt) {
           if (this.isGameOver || this.isLevelUpPaused) return;
 
+          this.timeAlive += dt;
           this.player.update(dt, this.input, this.bounds);
 
-          // 生成敌人：累积 dt，当超过 1 秒就生成
+          // 生成敌人：随时间逐步加速，并限制屏幕最大敌人数
+          const currentSpawnInterval = Math.max(
+            this.spawnIntervalMin,
+            this.spawnIntervalBase * Math.pow(0.985, this.timeAlive)
+          );
           this.spawnTimer += dt;
-          while (this.spawnTimer >= this.spawnInterval) {
-            this.spawnTimer -= this.spawnInterval;
-            this._spawnEnemy();
+          while (this.spawnTimer >= currentSpawnInterval) {
+            this.spawnTimer -= currentSpawnInterval;
+            if (this.enemies.length < this.maxEnemies) this._spawnEnemy();
           }
 
           for (const enemy of this.enemies) {
@@ -634,6 +753,16 @@
             this.expOrbs.splice(i, 1);
           }
 
+          for (let i = this.pickups.length - 1; i >= 0; i--) {
+            const pickup = this.pickups[i];
+            const hit =
+              distSq(this.player.pos.x, this.player.pos.y, pickup.pos.x, pickup.pos.y) <=
+              (this.player.radius + pickup.radius) ** 2;
+            if (!hit) continue;
+            pickup.apply(this.player);
+            this.pickups.splice(i, 1);
+          }
+
           if (this.player.exp >= this.player.expToLevel) {
             this.player.exp -= this.player.expToLevel;
             this.player.level += 1;
@@ -653,6 +782,7 @@
           for (const enemy of this.enemies) enemy.draw(this.ctx);
           for (const bullet of this.bullets) bullet.draw(this.ctx);
           for (const orb of this.expOrbs) orb.draw(this.ctx);
+          for (const pickup of this.pickups) pickup.draw(this.ctx);
 
           // 左上角显示玩家 HP
           this.ctx.fillStyle = "#fff";
